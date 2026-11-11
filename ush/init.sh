@@ -14,9 +14,6 @@ case ${MACHINE_ID} in
   ursa)
     RDAS_DATA=/scratch4/BMC/rtrr/RDAS_DATA
     ;;
-  jet)
-    RDAS_DATA=/lfs5/BMC/nrtrr/RDAS_DATA
-    ;;
   orion|hercules)
     RDAS_DATA=/work/noaa/zrtrr/RDAS_DATA
     ;;
@@ -28,6 +25,8 @@ case ${MACHINE_ID} in
       RDAS_DATA=/gpfs/f5/gsl-glo/world-shared/role.rrfsfix/RDAS_DATA
     elif [[ -d /gpfs/f6 ]]; then
       RDAS_DATA=/gpfs/f6/bil-fire10-oar/world-shared/role.rrfsfix/RDAS_DATA
+    elif [[ -d /gpfs/f7 ]]; then
+      RDAS_DATA=/gpfs/f7/wrfruc/world-shared/role.rrfsfix/RDAS_DATA
     else
       echo "unsupported gaea cluster: ${MACHINE_ID}"
     fi
@@ -47,4 +46,16 @@ if [[ ! "${filetype}" == *"symbolic link"* ]]; then
 fi
 mkdir -p ${basedir}/fix
 ln -snf ${RDAS_DATA}/fix ${agentfile}
+# Data for the optional RRFS NA 3 km ctest (rrfs-test-na3km)
+case ${MACHINE_ID} in
+  ursa)
+    NA3KM_DATA=/scratch4/BMC/zrtrr/Samuel.Degelia/rrfs-test-na3km_data
+    ;;
+  wcoss2)
+    NA3KM_DATA=/lfs/h3/emc/lam/noscrub/samuel.degelia/rrfs-test-na3km_data
+    ;;
+esac
+if [[ -n "${NA3KM_DATA:-}" ]]; then
+  ln -snf ${NA3KM_DATA} ${basedir}/fix/.agent_na3km
+fi
 touch ${basedir}/fix/INIT_DONE

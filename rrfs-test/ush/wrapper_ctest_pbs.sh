@@ -2,23 +2,33 @@
 set -euo pipefail
 
 # Parse arguments from the CTestTestfiles.cmake
+# APP is optional (i-jedi dispatches via `ijedi.x <app> <yaml>`; other executables take
+# just <yaml>) and is left empty by `read` when the caller passes only 5 fields.
 ARGUMENTS="$1"
-read TEST_NAME EXECUTABLE CONFIG_FILE PPN NODES <<< "$ARGUMENTS"
+read TEST_NAME EXECUTABLE CONFIG_FILE PPN NODES APP <<< "$ARGUMENTS"
 WORKDIR="$(pwd)"
 RDASApp="${WORKDIR}/../../.."
 OUTFILE="${WORKDIR}/${TEST_NAME}.out"
 ERRFILE="${WORKDIR}/${TEST_NAME}.err"
-NTASKS=$((NODES * PPN))
+# Optional CTEST_PBS_*/CTEST_MPIRUN_ARGS overrides come from the test's ENVIRONMENT property
+NTASKS=${CTEST_PBS_NTASKS:-$((NODES * PPN))}
 
 rm -f ${OUTFILE}
 rm -f ${ERRFILE}
+
+# Only i-jedi's dispatch executable takes an app argument before the yaml
+if [[ -n "${APP}" ]]; then
+  EXE_ARGS="\"${APP}\" \"${CONFIG_FILE}\""
+else
+  EXE_ARGS="\"${CONFIG_FILE}\""
+fi
 
 # Run the PBS job
 qsub -Wblock=true <<EOF
 #!/bin/bash
 #PBS -N ${TEST_NAME}
-#PBS -l place=excl,select=${NODES}:ncpus=${PPN}:mem=500GB
-#PBS -l walltime=00:45:00
+#PBS -l place=excl,select=${NODES}:ncpus=${CTEST_PBS_NCPUS:-${PPN}}:mem=500GB
+#PBS -l walltime=${CTEST_PBS_WALLTIME:-00:45:00}
 #PBS -o ${OUTFILE}
 #PBS -e ${ERRFILE}
 #PBS -A ${PBS_ACCOUNT}
@@ -32,7 +42,8 @@ ulimit -a
 export OOPS_TRACE=0
 export OMP_NUM_THREADS=1
 export LD_LIBRARY_PATH="${RDASApp}/build/lib64:${LD_LIBRARY_PATH}"
-mpirun -n ${NTASKS} -ppn ${PPN} -cpu-bind core "${RDASApp}/build/bin/${EXECUTABLE}" "${CONFIG_FILE}"
+${CTEST_PBS_ENV:+export ${CTEST_PBS_ENV}}
+mpirun -n ${NTASKS} -ppn ${PPN} ${CTEST_MPIRUN_ARGS:-} -cpu-bind core "${RDASApp}/build/bin/${EXECUTABLE}" ${EXE_ARGS}
 MPIRUN_EXIT_CODE=\$?
 echo "TEST_FINISHED_WITH_EXIT_CODE \$MPIRUN_EXIT_CODE" >> "${OUTFILE}"
 exit \$MPIRUN_EXIT_CODE
